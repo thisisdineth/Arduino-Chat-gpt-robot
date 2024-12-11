@@ -1,41 +1,45 @@
+//version 01, This isn't contain memory so bot can't remember about his previous chats
+//usr esp 32 Development board
+
 #include <WiFi.h>
 #include <HTTPClient.h>
 #include <ArduinoJson.h>
-#include <driver/i2s.h>
+#include "driver/i2s.h"
 
-// Wi-Fi Credentials
-const char* ssid = "SLT_FIBRE";
-const char* password = "0342221353";
+//Drivers USED with this 
 
-// OpenAI API
-const String apiKey = "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";
-const String apiUrl = "https://api.openai.com/v1/chat/completions";
+#define WIFI_SSID "Your_WiFi_SSID"
+#define WIFI_PASSWORD "Your_WiFi_Password"
+#define OPENAI_API_KEY "Your_OpenAI_API_Key"
 
-// GPIO Pins
-#define BUTTON_PIN 32
-#define YELLOW_LED_PIN 25
-#define BLUE_LED_PIN 26
-#define I2S_BCLK GPIO_NUM_27
-#define I2S_LRC GPIO_NUM_14
-#define I2S_DOUT GPIO_NUM_15
-#define MIC_PIN 2
+// Pin Definitions
+#define SWITCH_PIN 33
+#define YELLOW_LED_PIN 32
+#define BLUE_LED_PIN 25
 
-// States
-bool isBotActive = false;
+// I2S Pin Definitions
+#define I2S_BCLK 27
+#define I2S_LRC 14
+#define I2S_DOUT 26
+#define MIC_SD_PIN 14
+#define MIC_SCK_PIN 12
+#define MIC_WS_PIN 15
+
+bool systemOn = false;
 bool isListening = false;
-bool isResponding = false;
-unsigned long lastHeardTime = 0;
-const unsigned long silenceTimeout = 4000; // 4 seconds of silence to stop listening
 
 // Function Prototypes
-void setupWiFi();
-String transcribeAudio();
-String getChatGPTResponse(const String& prompt);
-void playAudio(const String& text);
+void initializeI2S();
+void captureAudio();
+void processCommand(String command);
+String getResponseFromChatGPT(String input);
+void textToSpeech(String text);
 
 void setup() {
-  // Pin Configurations
-  pinMode(BUTTON_PIN, INPUT_PULLUP);
+  Serial.begin(115200);
+
+  // Initialize GPIO Pins
+  pinMode(SWITCH_PIN, INPUT_PULLUP);
   pinMode(YELLOW_LED_PIN, OUTPUT);
   pinMode(BLUE_LED_PIN, OUTPUT);
 
@@ -43,135 +47,123 @@ void setup() {
   digitalWrite(YELLOW_LED_PIN, LOW);
   digitalWrite(BLUE_LED_PIN, LOW);
 
-  // I2S Configuration
+  // Initialize I2S
+  initializeI2S();
+
+  // Connect to WiFi
+  WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
+  Serial.println("Connecting to WiFi...");
+  while (WiFi.status() != WL_CONNECTED) {
+    delay(1000);
+    Serial.println(".");
+  }
+  Serial.println("Connected to WiFi");
+}
+
+void loop() {
+  if (digitalRead(SWITCH_PIN) == LOW) { // Check if the button is pressed
+    delay(200); // Debounce delay
+    systemOn = !systemOn;
+
+    if (systemOn) {
+      Serial.println("System turned ON");
+      digitalWrite(YELLOW_LED_PIN, LOW);
+      digitalWrite(BLUE_LED_PIN, LOW);
+    } else {
+      Serial.println("System turned OFF");
+      digitalWrite(YELLOW_LED_PIN, LOW);
+      digitalWrite(BLUE_LED_PIN, LOW);
+    }
+  }
+
+  if (systemOn) {
+    Serial.println("Say the wakeup word...");
+    isListening = true;
+    digitalWrite(YELLOW_LED_PIN, HIGH); // Yellow LED ON when listening
+
+    String command = ""; // Simulate audio to text recognition
+    // Replace this part with actual speech recognition logic
+    delay(5000); // Wait for user to speak
+    command = "hellow bot"; // Simulate wakeup word recognition
+
+    if (command == "hellow bot") {
+      Serial.println("Wakeup word detected. Listening to the user...");
+      digitalWrite(YELLOW_LED_PIN, HIGH); // Listening mode ON
+
+      // Simulate user speech to text
+      command = "How are you?"; // Simulate user speech recognition
+      delay(4000); // Simulate 4 seconds of silence after speaking
+      digitalWrite(YELLOW_LED_PIN, LOW); // Stop listening
+
+      Serial.println("Processing command...");
+      String response = getResponseFromChatGPT(command);
+      textToSpeech(response); // Convert response to speech
+    }
+  }
+}
+
+// Function to initialize I2S
+void initializeI2S() {
   i2s_config_t i2s_config = {
       .mode = (i2s_mode_t)(I2S_MODE_MASTER | I2S_MODE_TX),
-      .sample_rate = 16000,
+      .sample_rate = 44100,
       .bits_per_sample = I2S_BITS_PER_SAMPLE_16BIT,
       .channel_format = I2S_CHANNEL_FMT_RIGHT_LEFT,
       .communication_format = I2S_COMM_FORMAT_I2S_MSB,
       .intr_alloc_flags = ESP_INTR_FLAG_LEVEL1,
       .dma_buf_count = 8,
       .dma_buf_len = 64,
-      .use_apll = false
-  };
-
+      .use_apll = false,
+      .tx_desc_auto_clear = true,
+      .fixed_mclk = 0};
   i2s_pin_config_t pin_config = {
       .bck_io_num = I2S_BCLK,
       .ws_io_num = I2S_LRC,
       .data_out_num = I2S_DOUT,
-      .data_in_num = I2S_PIN_NO_CHANGE // No microphone input in this example
-  };
+      .data_in_num = I2S_PIN_NO_CHANGE};
 
-  // Install and start I2S driver
   i2s_driver_install(I2S_NUM_0, &i2s_config, 0, NULL);
   i2s_set_pin(I2S_NUM_0, &pin_config);
-
-  // Serial and Wi-Fi Initialization
-  Serial.begin(115200);
-  setupWiFi();
+  i2s_zero_dma_buffer(I2S_NUM_0);
 }
 
-void loop() {
-  // Check Button State
-  if (digitalRead(BUTTON_PIN) == LOW) {
-    isBotActive = true;
-    Serial.println("Bot activated. Waiting for wake word...");
-    delay(500); // Debounce delay
-  }
-
-  // Listening for Wake Word
-  if (isBotActive && !isResponding) {
-    String voiceInput = transcribeAudio();
-    if (voiceInput.equalsIgnoreCase("hello bot")) {
-      Serial.println("Wake word detected!");
-      isListening = true;
-      digitalWrite(YELLOW_LED_PIN, HIGH); // Turn on listening LED
-    }
-  }
-
-  // Listening for User Input
-  if (isListening && !isResponding) {
-    String userInput = transcribeAudio();
-    if (userInput != "") {
-      Serial.println("User input received: " + userInput);
-      lastHeardTime = millis(); // Reset silence timer
-    } else if (millis() - lastHeardTime > silenceTimeout) {
-      isListening = false;
-      digitalWrite(YELLOW_LED_PIN, LOW); // Turn off listening LED
-      isResponding = true;
-
-      // Get Response from ChatGPT
-      String response = getChatGPTResponse("The user said: " + userInput);
-      Serial.println("Bot Response: " + response);
-
-      // Play Response Audio
-      digitalWrite(BLUE_LED_PIN, HIGH); // Turn on responding LED
-      playAudio(response);
-      digitalWrite(BLUE_LED_PIN, LOW); // Turn off responding LED
-
-      isResponding = false;
-      isBotActive = false; // Reset bot state
-      Serial.println("Bot ready for next interaction.");
-    }
-  }
-}
-
-// Function to Setup Wi-Fi
-void setupWiFi() {
-  Serial.print("Connecting to Wi-Fi...");
-  WiFi.begin(ssid, password);
-  while (WiFi.status() != WL_CONNECTED) {
-    delay(500);
-    Serial.print(".");
-  }
-  Serial.println("\nConnected to Wi-Fi!");
-}
-
-// Function to Transcribe Audio (Placeholder for Speech Recognition)
-String transcribeAudio() {
-  // Simulated transcription for testing
-  // Replace this with actual microphone and ML integration for speech recognition
-  delay(1000);
-  return "hello bot"; // Placeholder transcription
-}
-
-// Function to Get ChatGPT Response
-String getChatGPTResponse(const String& prompt) {
+// Simulated function to process command with ChatGPT API
+String getResponseFromChatGPT(String input) {
   HTTPClient http;
-  http.begin(apiUrl);
+  http.begin("https://api.openai.com/v1/chat/completions");
   http.addHeader("Content-Type", "application/json");
-  http.addHeader("Authorization", "Bearer " + apiKey);
+  http.addHeader("Authorization", String("Bearer ") + OPENAI_API_KEY);
 
-  // Prepare JSON Payload
-  DynamicJsonDocument doc(1024);
-  JsonObject systemMessage = doc["messages"].createNestedObject();
-  systemMessage["role"] = "system";
-  systemMessage["content"] = "You are a helpful assistant.";
-
-  JsonObject userMessage = doc["messages"].createNestedObject();
-  userMessage["role"] = "user";
-  userMessage["content"] = prompt;
+  // Create JSON payload
+  StaticJsonDocument<512> doc;
+  doc["model"] = "gpt-3.5-turbo";
+  JsonArray messages = doc.createNestedArray("messages");
+  JsonObject message = messages.createNestedObject();
+  message["role"] = "user";
+  message["content"] = input;
 
   String payload;
   serializeJson(doc, payload);
 
+  // Send HTTP POST
   int httpResponseCode = http.POST(payload);
-  String response;
+
+  String response = "";
   if (httpResponseCode == 200) {
     response = http.getString();
-    DynamicJsonDocument responseDoc(2048);
-    deserializeJson(responseDoc, response);
-    response = responseDoc["choices"][0]["message"]["content"].as<const char*>();
+    Serial.println("Response from ChatGPT: " + response);
   } else {
-    Serial.println("Error: " + String(httpResponseCode));
+    Serial.println("Error in ChatGPT API request");
   }
   http.end();
+
   return response;
 }
 
-// Function to Play Audio (Placeholder)
-void playAudio(const String& text) {
-  Serial.println("Playing audio: " + text);
-  // Use I2S library to convert text-to-speech if supported
+// Simulated function to convert text to speech
+void textToSpeech(String text) {
+  digitalWrite(BLUE_LED_PIN, HIGH); // Blue LED ON when speaking
+  Serial.println("Speaking: " + text);
+  delay(5000); // Simulate TTS duration
+  digitalWrite(BLUE_LED_PIN, LOW); // Blue LED OFF after speaking
 }
