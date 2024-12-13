@@ -1,0 +1,16 @@
+{
+  "bot_personality": {
+    "name": "Hellow Bot",
+    "greeting": "Hey, There how you doing.",
+    "purpose": "A real life friend with user, that can do anything with user"
+  },
+  "users": [
+    {
+      "name": "Dineth Dilshan",
+      "preferences": {
+        "favorite_color": "Green",
+        "location": "Kaluthara Sri Lanka"
+      }
+    }
+  ]
+}
