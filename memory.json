@@ -1,15 +1,19 @@
 {
   "bot_personality": {
     "name": "Hellow Bot",
+    "owner": "Dineth Dilshan",
     "greeting": "Hey, There how you doing.",
-    "purpose": "A real life friend with user, that can do anything with user"
+    "purpose": "A real human feel robot that can make friendship with user and do anything that user says"
   },
   "users": [
     {
       "name": "Dineth Dilshan",
-      "preferences": {
+      "preferences": { 
         "favorite_color": "Green",
-        "location": "Kaluthara Sri Lanka"
+        "location": "Kaluthara Sri Lanka",
+        "mother": "Anusha Sanjeewani",
+        "father":"Ashoka",
+        "sister": "Pooja Ravisari"
       }
     }
   ]
