@@ -211,3 +211,190 @@ Press the switch to power on the bot, and it will guide you through the interact
 ## Contributing
 Feel free to fork this repository, open issues, or submit pull requests if you have suggestions for improvements or fixes.
 
+___________________
+---
+Here’s a step-by-step guide to set up the Arduino IDE to work with your **ESP32** and this project:
+
+---
+
+### **Step 1: Install Arduino IDE**
+1. Download and install the Arduino IDE from the official website:  
+   [https://www.arduino.cc/en/software](https://www.arduino.cc/en/software).
+   
+   - Use version 1.8.x or the newer **Arduino IDE 2.x**.
+
+---
+
+### **Step 2: Add ESP32 Support to Arduino IDE**
+
+1. **Open Arduino IDE**:
+   - Launch the Arduino IDE.
+
+2. **Go to Preferences**:
+   - In the menu bar, click **File > Preferences** (or **Arduino > Preferences** on macOS).
+
+3. **Add ESP32 Board URL**:
+   - In the **Additional Board Manager URLs** field, add the following URL:
+     ```
+     https://raw.githubusercontent.com/espressif/arduino-esp32/gh-pages/package_esp32_index.json
+     ```
+   - If there are already URLs in this field, separate them with a comma or a new line.
+
+4. **Open the Board Manager**:
+   - Go to **Tools > Board > Boards Manager**.
+
+5. **Install the ESP32 Board Package**:
+   - Search for `ESP32` in the Boards Manager.
+   - Find the package from **Espressif Systems** and click **Install**.
+
+6. **Select Your ESP32 Board**:
+   - After installation, go to **Tools > Board** and select the appropriate ESP32 board for your setup (e.g., `ESP32 Dev Module`).
+
+---
+
+### **Step 3: Install Required Libraries**
+1. **Open the Library Manager**:
+   - Go to **Tools > Manage Libraries**.
+
+2. **Search and Install These Libraries**:
+   - **ArduinoJson**:
+     - Used for handling JSON data.
+     - Search for `ArduinoJson` by Benoit Blanchon and install the latest version.
+   - **SD**:
+     - Built into the IDE but ensure it’s installed and updated.
+     - If missing, search for `SD` and install it.
+   - **HTTPClient**:
+     - Comes with the ESP32 core. No additional installation is required.
+   - **driver/i2s.h**:
+     - This is included with the ESP32 board package. No separate installation is required.
+
+---
+
+### **Step 4: Configure Your ESP32**
+1. **Connect Your ESP32 Board**:
+   - Use a USB cable to connect your ESP32 to your computer.
+
+2. **Select the Correct Port**:
+   - Go to **Tools > Port** and select the port to which your ESP32 is connected (e.g., `COM3` on Windows or `/dev/ttyUSB0` on Linux/macOS).
+
+3. **Set Upload Speed**:
+   - Go to **Tools > Upload Speed** and set it to **115200**.
+
+4. **Set Partition Scheme**:
+   - Go to **Tools > Partition Scheme** and choose **Default 4MB with spiffs** (or similar).
+
+---
+
+### **Step 5: Test ESP32 with a Simple Sketch**
+1. **Upload the Blink Example**:
+   - Go to **File > Examples > Basics > Blink**.
+   - Change the built-in LED pin to 2 (for most ESP32 boards):
+     ```cpp
+     #define LED_BUILTIN 2
+     void setup() {
+       pinMode(LED_BUILTIN, OUTPUT);
+     }
+     void loop() {
+       digitalWrite(LED_BUILTIN, HIGH); // Turn the LED on
+       delay(1000); // Wait for a second
+       digitalWrite(LED_BUILTIN, LOW);  // Turn the LED off
+       delay(1000); // Wait for a second
+     }
+     ```
+   - Upload the sketch to your ESP32 and verify the onboard LED blinks.
+
+---
+
+### **Step 6: Upload Your Project**
+1. Open your project code in the Arduino IDE.
+2. Make sure the following are properly configured:
+   - **Board**: Set to `ESP32 Dev Module` (or your specific ESP32 board).
+   - **Port**: Ensure the correct port is selected.
+3. Click **Upload** to flash the code onto the ESP32.
+
+---
+
+### **Step 7: Debugging with Serial Monitor**
+1. Open the Serial Monitor:
+   - Go to **Tools > Serial Monitor** (or press `Ctrl+Shift+M`).
+2. Set the baud rate to **115200**.
+3. Watch the output to debug issues with WiFi, SD card initialization, or API requests.
+
+---
+
+### **Step 8: Verify SD Card Functionality**
+1. Insert the formatted SD card into your SD card module.
+2. Run the **SD card initialization test code**:
+   ```cpp
+   #include <SD.h>
+   #define SD_CS_PIN 5
+
+   void setup() {
+     Serial.begin(115200);
+     if (!SD.begin(SD_CS_PIN)) {
+       Serial.println("SD Card initialization failed!");
+       while (1);
+     }
+     Serial.println("SD Card initialized successfully!");
+   }
+
+   void loop() {}
+   ```
+3. Open the Serial Monitor to verify the SD card initialization.
+
+---
+
+### **Step 9: Test OpenAI API**
+1. Replace the placeholder `Your_OpenAI_API_Key` with a valid OpenAI API key.
+2. Use a simple test to ensure the API responds correctly:
+   ```cpp
+   #include <WiFi.h>
+   #include <HTTPClient.h>
+
+   #define WIFI_SSID "Your_WiFi_SSID"
+   #define WIFI_PASSWORD "Your_WiFi_Password"
+
+   #define OPENAI_API_KEY "Your_OpenAI_API_Key"
+
+   void setup() {
+     Serial.begin(115200);
+     WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
+     while (WiFi.status() != WL_CONNECTED) {
+       delay(1000);
+       Serial.println("Connecting to WiFi...");
+     }
+     Serial.println("Connected to WiFi");
+
+     HTTPClient http;
+     http.begin("https://api.openai.com/v1/models");
+     http.addHeader("Authorization", String("Bearer ") + OPENAI_API_KEY);
+
+     int httpResponseCode = http.GET();
+     if (httpResponseCode > 0) {
+       String response = http.getString();
+       Serial.println("API Response:");
+       Serial.println(response);
+     } else {
+       Serial.println("Error on HTTP request");
+     }
+     http.end();
+   }
+
+   void loop() {}
+   ```
+3. Verify that the API responds with a list of available models.
+
+---
+
+### **Troubleshooting**
+1. **WiFi Issues**:
+   - Ensure the WiFi credentials are correct.
+   - Verify the ESP32 is in range of the router.
+
+2. **SD Card Errors**:
+   - Format the SD card to **FAT32**.
+   - Check the connections (CS pin, power, GND).
+
+3. **Serial Communication**:
+   - Ensure the baud rate in the Serial Monitor matches the code (115200).
+
